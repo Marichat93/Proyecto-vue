@@ -5,7 +5,7 @@ import auth from '../firebase'
 
 export const useUserStore = defineStore('userState', {
 
-    state: () => ({ user: null, uid: null, error: null }),
+    state: () => ({ user: null, uid: null, error: null, registerError: null }),
 
     getters: {
         isActiveUser: (state) => ((state.user && state.uid) ? true : false)
@@ -47,43 +47,67 @@ export const useUserStore = defineStore('userState', {
             }
             return;
         },
-        async registerUser(email, passwor) {
+        async registerUser(email, password) {
             try {
-                const userCredential = await createUserWithEmailAndPassword(auth, email, passwor);
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
                 this.user = userCredential.user;
                 this.uid = userCredential.user.uid;
-                console.log("Usuario registrado exitosamente");
+                // Limpiar errores previos
+                this.registerError = null;
                 return {
+                    success: true,
                     email: this.user.email,
                     uid: this.uid
                 };
             } catch (error) {
+                // Objeto de error por defecto
+                let errorResponse = {
+                    success: false,
+                    tipo: 'desconocido',
+                    mensaje: 'Error de registro'
+                };
+                //manejar los errores
                 switch (error.code) {
                     case "auth/email-already-in-use":
-                        this.error = {
-                            tipo: 'registro',
+                        errorResponse = {
+                            success: false,
+                            tipo: "correo",
                             mensaje: "Correo electrónico ya está en uso"
                         };
                         break;
+
                     case "auth/invalid-email":
-                        this.error = {
-                            tipo: 'registro',
+                        errorResponse = {
+                            success: false,
+                            tipo: "formato",
                             mensaje: "Formato de correo electrónico inválido"
                         };
                         break;
+
                     case "auth/weak-password":
-                        this.error = {
-                            tipo: 'registro',
+                        errorResponse = {
+                            success: false,
+                            tipo: "contraseña",
                             mensaje: "Contraseña demasiado débil"
                         };
                         break;
+
                     default:
-                        this.error = {
-                            tipo: 'registro',
-                            mensaje: "Registro fallido"
+                        errorResponse = {
+                            success: false,
+                            tipo: "desconocido",
+                            mensaje: error.message || "Error desconocido en el registro"
                         };
                 }
-                return null;
+
+                // Establecer error de registro
+                this.registerError = errorResponse;
+
+                // Limpiar error de login
+                this.error = null;
+
+                // Lanzar error
+                throw errorResponse;
             }
         },
         async logoutUser() {
@@ -91,6 +115,7 @@ export const useUserStore = defineStore('userState', {
                 await signOut(auth);
                 this.user = null;
                 this.uid = null;
+                this.registerError = null;
                 return {
                     email: null
                 }
